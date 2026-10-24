@@ -1,0 +1,28 @@
+# Gradle / build output
+.gradle/
+build/
+out/
+bin/
+# Datagen cache (generated resources themselves are tracked)
+src/generated/resources/.cache/
+# ForgeGradle run directories
+run/
+runs/
+logs/
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+# OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+# Structure-review gate markers (local only)
+.structure-review-pending*
+.structure-review-paused
+.docket/

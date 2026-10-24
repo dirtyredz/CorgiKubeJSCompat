@@ -1,0 +1,80 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+
+version = mod_version
+group = mod_group_id
+base { archivesName = "${mod_id}-${minecraft_version}" }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+    copyIdeResources = true
+}
+
+// Production uses only unmapped mod API names (and Supplier), so these exact,
+// hash-checked installed jars need no fg.deobf or transitive Maven downloads.
+def dependencyDirectory = providers.gradleProperty('dependencyDir').orElse('run/dependencies')
+def pins = [
+    'kubejs-forge-2001.6.5-build.26.jar': '1769312192fbf9d72f45054ba61130523bfb471b5f480a4bff8c210ec09400bb',
+    'Corgilib-Forge-1.20.1-4.0.3.5.jar': '6879c214e0793278e14105b70d085ba218551c39daa78c846273030278bef350',
+    'rhino-forge-2001.2.3-build.10.jar': 'fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6'
+]
+
+sourceSets {
+    gameTest {} // Standalone installed-server instrumentation; never a release input.
+}
+repositories { mavenCentral() }
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    compileOnly files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.ow2.asm:asm-tree:9.8'
+    gameTestImplementation 'org.ow2.asm:asm-tree:9.8'
+}
+
+tasks.register('verifyDependencyPins') {
+    inputs.files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+    doLast {
+        pins.each { name, expected ->
+            def input = file("${dependencyDirectory.get()}/$name")
+            if (!input.isFile()) throw new GradleException("Missing offline input: $input (set -PdependencyDir)")
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(input.bytes).encodeHex().toString()
+            if (actual != expected) throw new GradleException("SHA-256 mismatch: $input")
+        }
+    }
+}
+compileJava.dependsOn verifyDependencyPins
+test {
+    useJUnitPlatform()
+    systemProperty 'mainClasses', sourceSets.main.output.classesDirs.asPath
+    systemProperty 'mainResources', sourceSets.main.output.resourcesDir.absolutePath
+}
+processResources {
+    inputs.property 'mod_version', mod_version
+    filesMatching('META-INF/mods.toml') { expand mod_version: mod_version }
+}
+jar {
+    from('LICENSE') { into 'META-INF' }
+    manifest.attributes 'Implementation-Version': project.version
+    finalizedBy 'reobfJar'
+}
+tasks.register('verificationHooksJar', Jar) {
+    from(sourceSets.gameTest.output) { include '**/hooks/**' }
+    archiveFileName = 'verification-hooks.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+}
+tasks.register('verificationAgentJar', Jar) {
+    dependsOn 'verificationHooksJar'
+    from(sourceSets.gameTest.output) { include '**/agent/**' }
+    archiveFileName = 'verification-agent.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    manifest.attributes(
+        'Premain-Class': 'io.github.dirtyredz.corgikubejscompat.verification.agent.RaceAgent',
+        'Boot-Class-Path': 'verification-hooks.jar'
+    )
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
