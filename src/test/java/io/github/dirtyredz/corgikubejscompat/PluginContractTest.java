@@ -31,10 +31,16 @@ class PluginContractTest {
         assertEquals(Opcodes.GETSTATIC, read.getOpcode());
         assertEquals("corgitaco/corgilib/core/CorgiLibRegistry", read.owner);
         assertEquals("CONDITION", read.name);
+        assertEquals("Ljava/util/function/Supplier;", read.desc);
+        assertTrue((hook.access & Opcodes.ACC_PUBLIC) != 0);
         assertTrue(code.stream().anyMatch(i -> i instanceof MethodInsnNode m
                 && m.owner.equals("java/util/Objects") && m.name.equals("requireNonNull")));
         assertFalse(code.stream().anyMatch(i -> i instanceof JumpInsnNode));
         assertTrue(hook.tryCatchBlocks.isEmpty(), "Initialization failures must propagate");
+        assertTrue(code.stream().filter(i -> i instanceof MethodInsnNode).allMatch(i -> {
+            MethodInsnNode call = (MethodInsnNode) i;
+            return call.owner.equals("java/util/Objects") && call.name.equals("requireNonNull");
+        }), "Only read the supplier; never invoke it or perform broader initialization");
         for (MethodNode method : node.methods) {
             for (var i : method.instructions) {
                 if (i instanceof MethodInsnNode m) assertFalse(m.owner.startsWith("corgitaco/"), "Never call init() or codecs");
@@ -43,6 +49,8 @@ class PluginContractTest {
     }
 
     @Test void publicConstructorIsInertAndDiscoveryIsBothSides() throws Exception {
+        assertFalse(plugin().methods.stream().anyMatch(m -> m.name.equals("<clinit>")),
+                "Plugin discovery must not initialize CorgiLib early");
         MethodNode ctor = plugin().methods.stream().filter(m -> m.name.equals("<init>")).findFirst().orElseThrow();
         assertEquals("()V", ctor.desc);
         assertTrue((ctor.access & Opcodes.ACC_PUBLIC) != 0);
