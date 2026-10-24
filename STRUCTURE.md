@@ -5,7 +5,7 @@
 - `src/main/java/io/github/dirtyredz/corgikubejscompat/`: the two spec-defined entry points;
   minimal Forge registration and the KubeJS class-initialization barrier.
 - `src/main/resources/`: exact-version Forge dependencies and both-side KubeJS discovery.
-- `src/test/`: cheap bytecode contract checks; no Minecraft bootstrap.
+- `src/test/`: cheap plugin-bytecode and startup-trace contract checks; no Minecraft bootstrap.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/agent/`: installed-class
   `StartupOrderingAgent` instrumentation. Kept outside main and outside the release jar.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/hooks/`: bootstrap-visible

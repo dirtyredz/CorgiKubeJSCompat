@@ -70,12 +70,21 @@ async function main() {
   fs.writeFileSync(path.join(run, 'pid.txt'), String(child.pid));
   const log = fs.createWriteStream(path.join(run, 'console.log'));
   let text = '', doneMs, reloadRequested = false, reloaded = false, stopping = false, expired = false;
+  let controlStopped = false;
   let reloadTimer;
   const stop = () => { if (!stopping) { stopping = true; child.stdin.write('stop\n'); } };
   const watchdog = setTimeout(() => { expired = true; child.kill(); }, 480000);
   const receive = data => {
     log.write(data);
     text += data.toString();
+    // Some pack threads survive Forge's expected fatal startup error. Stop only after
+    // the hooks validate the actual CME and Forge reports the failed startup.
+    if (scenario === 'control' && !controlStopped && text.includes('Failed to start the minecraft server')
+      && text.includes('ConcurrentModificationException')
+      && fs.readFileSync(path.join(run, 'startup-ordering-trace.log'), 'utf8').includes('PASS control')) {
+      controlStopped = true;
+      child.kill();
+    }
     if (!doneMs && /Done \([\d.]+s\)!/.test(text)) {
       doneMs = performance.now() - started;
       console.log('Done in', (doneMs / 1000).toFixed(3), 'seconds; requesting reload');
@@ -113,9 +122,9 @@ async function main() {
     contentsHash = crypto.createHash('sha256').update(after).digest('hex');
   }
   const passed = !expired && (scenario === 'control'
-    ? code !== null && code !== 86 && trace.includes('PASS control') && /ConcurrentModificationException/.test(text) && /ScriptManager\.load\(ScriptManager\.java:192\)/.test(trace)
+    ? (code !== null || controlStopped) && code !== 86 && trace.includes('PASS control') && /ConcurrentModificationException/.test(text) && /ScriptManager\.load\(ScriptManager\.java:192\)/.test(trace)
     : code === 0 && doneMs && reloaded && (!instrumented || (trace.includes('PASS ' + scenario) && contentsHash)));
-  const result = {scenario, run, pid:child.pid, code, expired, doneMs, reloaded, contentsHash, passed};
+  const result = {scenario, run, pid:child.pid, code, expired, controlStopped, doneMs, reloaded, contentsHash, passed};
   fs.writeFileSync(path.join(run, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
   if (!passed) throw Error('Runtime verification invalid or failed; inspect ' + run);

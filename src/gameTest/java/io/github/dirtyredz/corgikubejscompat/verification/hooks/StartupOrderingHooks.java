@@ -63,7 +63,8 @@ public final class StartupOrderingHooks {
     }
 
     public static synchronized void event(String message) {
-        trace.println(System.nanoTime() + " [" + Thread.currentThread().getName() + "] " + message);
+        Thread thread = Thread.currentThread();
+        trace.println(System.nanoTime() + " [" + thread.getName() + "#" + thread.getId() + "] " + message);
         trace.flush();
     }
     public static void invalid(String message, Throwable failure) {
@@ -151,6 +152,7 @@ public final class StartupOrderingHooks {
                     event("ORIGINAL_CME");
                     synchronized (StartupOrderingHooks.class) { expected.printStackTrace(trace); trace.flush(); }
                     end();
+                    if (MODE.equals("control")) finish();
                     throw expected;
                 }
             }
@@ -164,6 +166,10 @@ public final class StartupOrderingHooks {
         return new TracedRootMap((Map<Object, Object>) map);
     }
     static Mutation mutation(String operation, Object key) {
+        if (operation.equals("put-unchanged")) {
+            event("ROOT_PUT_UNCHANGED " + key);
+            return null;
+        }
         Mutation mutation = new Mutation();
         WRITING.add(mutation);
         if (ACTIVE.get() != 0) mutation.overlap();

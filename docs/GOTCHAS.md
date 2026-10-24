@@ -21,3 +21,9 @@
   `stage/` sibling contains the verified installed jars and server libraries.
 - Other server jobs can launch Java through arbitrary argument files. The runtime runner
   waits for all existing Java processes rather than guessing activity from Forge class names.
+- Installed `MappedRegistry` inserts a holder with `computeIfAbsent`, then assigns that
+  identical holder again. Trace the no-op assignment separately from actual root mutations;
+  three CorgiLib insertions are not six changes. Forge workers can also share thread names,
+  so traces include thread IDs.
+- The control's failed Forge startup can leave pack threads alive. Validate the CME in the
+  hook, let it propagate to Forge's startup-failure log, then terminate that control JVM.

@@ -7,6 +7,7 @@ The saved server stage is a read-only input; every run gets a private copy under
    root iterator, release the writer, wait for its constructor's init call to return, resume.
    Require `ConcurrentModificationException` at `ScriptManager.java:192`, three overlapping writes,
    and `PASS control` in the trace. The expected failed server boot is not a successful startup.
+   After Forge reports that failure, terminate lingering pack threads; record `controlStopped`.
 2. `writer-first`: hold initialization; enter the actual plugin hook; independent coordinator
    releases the writer. Require initializer end, hook return, then iterator creation.
 3. `reader-first`: hold the constructor before init; let the plugin initialize; release the
@@ -17,6 +18,9 @@ The saved server stage is a read-only input; every run gets a private copy under
 
 The root key map is wrapped before its first use. Puts, removals, entry changes and mutations
 through collection views log keys, threads and stacks, including vanilla bootstrap writes.
+An identical holder assignment is logged as `ROOT_PUT_UNCHANGED`, not a second mutation.
+The cheap trace test covers the installed registry's insert-then-identical-assignment sequence
+and preserves the backing HashMap's fail-fast iterator behavior.
 Instrumentation changes only test processes. Tracing itself changes timing; do not benchmark it.
 All waits have a 60-second bound; the outer process watchdog is 480 seconds. Exit 86 or missing
 required events is invalid, never evidence that the fix worked.
