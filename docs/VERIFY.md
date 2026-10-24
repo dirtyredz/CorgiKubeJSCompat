@@ -34,3 +34,32 @@ The owner verifies clients separately; never launch a visible client from an age
 Inspect the release jar for exact mandatory BOTH dependencies, its single plugin entry,
 and no `verification`, test, agent or dependency classes. Compute SHA-256 on the final
 reobfuscated jar. Keep runtime logs and snapshots in ignored run directories for handoff.
+
+## Initial-build verification, 2026-10-24
+
+The implementation and cheap gate pass; **runtime acceptance is incomplete**.
+Inputs were the saved `2026-10-24-kubejs-cme/stage` and cached Adoptium Java 17.
+`COMPAT_WORLD` pointed to that evidence folder's `runs/default-1/smoke-world`.
+
+- `./gradlew --offline test build verificationAgentJar -PdependencyDir=<stage>/mods`:
+  passed, three tests. The new trace regression first failed with
+  `Three insertions, not six mutations ==> expected: <3> but was: <6>`, then passed
+  after separating identical holder assignments from mutations.
+- `powershell -NoProfile -File tools/inspect-jar.ps1`: passed; only the two production
+  classes, exact BOTH dependencies and the single plugin entry. Jar SHA-256:
+  `a53230f6087654395a88bf03331b7ebad092a0061a7dd1a262b0a8730276e4f1`.
+- Workspace `sync-mod-files.ps1 -Check` and direct comparison of all six canonical
+  worktree files passed. `node --check tools/verify-runtime.cjs` and `git diff --check` passed.
+- First control, `run/control-1792863939369`: reproduced the original CME at
+  `ScriptManager.java:192`, but was **invalid**: duplicate unchanged assignments were
+  counted as mutations, and the failed server left threads alive until the watchdog.
+  Both harness issues were corrected and the counting regression is covered by the cheap gate.
+- Corrected control, `run/control-1792866770732`: **invalid**, `expired: true` at 480 seconds,
+  before any ordering hook. `build/verification/control-thread-dump.txt` shows the main thread
+  running in Forge's jar-package scan (`Jar.getPackages`), not waiting on a barrier latch.
+  Other Java jobs started after this server launched; a valid exclusive run could not be completed.
+
+Both controls reported `Runtime verification invalid or failed; inspect <run>`.
+Writer-first, reader-first, baseline/snapshot comparison, and paired uninstrumented timing
+are **not run**: resume with a valid control in an exclusive machine window, then follow the
+protocol above. Client checks remain with the owner. No pack instance or Docket status was changed.
