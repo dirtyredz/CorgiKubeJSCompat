@@ -7,9 +7,9 @@
 - `src/main/resources/`: exact-version Forge dependencies and both-side KubeJS discovery.
 - `src/test/`: cheap bytecode contract checks; no Minecraft bootstrap.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/agent/`: installed-class
-  instrumentation. Kept outside main and outside the release jar.
+  `StartupOrderingAgent` instrumentation. Kept outside main and outside the release jar.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/hooks/`: bootstrap-visible
-  latch coordination, root mutation tracing, snapshots, and invalid-test detection.
+  `StartupOrderingHooks` latch coordination, root mutation tracing, snapshots, and invalid-test detection.
 - `tools/verify-runtime.cjs`: copies the saved stage into disposable `run/` directories,
   starts one headless BelowNormal server, reloads, stops, and validates results.
 - `tools/inspect-jar.ps1`: asserts the release contents, metadata and plugin discovery; prints SHA-256.

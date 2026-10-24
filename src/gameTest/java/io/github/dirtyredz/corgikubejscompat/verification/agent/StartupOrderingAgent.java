@@ -1,6 +1,6 @@
 package io.github.dirtyredz.corgikubejscompat.verification.agent;
 
-import io.github.dirtyredz.corgikubejscompat.verification.hooks.RaceHooks;
+import io.github.dirtyredz.corgikubejscompat.verification.hooks.StartupOrderingHooks;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
@@ -10,8 +10,8 @@ import java.security.ProtectionDomain;
 import java.util.Set;
 
 /** Test-only load-time instrumentation of the installed, SRG-named classes. */
-public final class RaceAgent implements ClassFileTransformer {
-    private static final String HOOKS = "io/github/dirtyredz/corgikubejscompat/verification/hooks/RaceHooks";
+public final class StartupOrderingAgent implements ClassFileTransformer {
+    private static final String HOOKS = "io/github/dirtyredz/corgikubejscompat/verification/hooks/StartupOrderingHooks";
     private static final String REGISTRY = "corgitaco/corgilib/core/CorgiLibRegistry";
     private static final String CONSTRUCTOR = "corgitaco/corgilib/forge/CorgiLibForge";
     private static final String PLUGIN = "io/github/dirtyredz/corgikubejscompat/CorgiRegistryPlugin";
@@ -21,8 +21,8 @@ public final class RaceAgent implements ClassFileTransformer {
     private static final Set<String> TARGETS = Set.of(REGISTRY, CONSTRUCTOR, PLUGIN, MANAGER, MAPPED, SERVER);
 
     public static void premain(String args, Instrumentation instrumentation) {
-        RaceHooks.start();
-        instrumentation.addTransformer(new RaceAgent());
+        StartupOrderingHooks.start();
+        instrumentation.addTransformer(new StartupOrderingAgent());
     }
 
     private static MethodInsnNode call(String name, String descriptor) {
@@ -99,12 +99,12 @@ public final class RaceAgent implements ClassFileTransformer {
                 }
             }
             if (changes != 1) throw new IllegalStateException("Expected one instrumentation site in " + name + ", got " + changes);
-            RaceHooks.event("TRANSFORM " + name);
+            StartupOrderingHooks.event("TRANSFORM " + name);
             ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             node.accept(writer);
             return writer.toByteArray();
         } catch (Throwable failure) {
-            RaceHooks.invalid("Instrumentation failed: " + name, failure);
+            StartupOrderingHooks.invalid("Instrumentation failed: " + name, failure);
             return null; // invalid() halts; transformer exceptions alone are ignored by the JVM.
         }
     }

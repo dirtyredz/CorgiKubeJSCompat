@@ -7,7 +7,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
 /** Bootstrap-visible hooks: JDK-only, no classloading of Minecraft from the agent. */
-public final class RaceHooks {
+public final class StartupOrderingHooks {
     private static final String MODE = System.getProperty("compat.scenario", "invalid");
     private static final CountDownLatch WRITER_HELD = new CountDownLatch(1);
     private static final CountDownLatch RELEASE_WRITER = new CountDownLatch(1);
@@ -29,11 +29,11 @@ public final class RaceHooks {
     private static final AtomicInteger SNAPSHOTS = new AtomicInteger();
     private static PrintWriter trace;
 
-    private RaceHooks() {}
+    private StartupOrderingHooks() {}
 
     public static void start() {
         try {
-            trace = new PrintWriter(Files.newBufferedWriter(Path.of("race-trace.log")));
+            trace = new PrintWriter(Files.newBufferedWriter(Path.of("startup-ordering-trace.log")));
         } catch (IOException e) { throw new UncheckedIOException(e); }
         require(Set.of("control", "writer-first", "reader-first", "baseline").contains(MODE), "Unknown scenario");
         event("SCENARIO " + MODE);
@@ -59,7 +59,7 @@ public final class RaceHooks {
             coordinator.setDaemon(true);
             coordinator.start();
         }
-        Runtime.getRuntime().addShutdownHook(new Thread(RaceHooks::finish, "compat-result"));
+        Runtime.getRuntime().addShutdownHook(new Thread(StartupOrderingHooks::finish, "compat-result"));
     }
 
     public static synchronized void event(String message) {
@@ -68,7 +68,7 @@ public final class RaceHooks {
     }
     public static void invalid(String message, Throwable failure) {
         event("INVALID " + message);
-        if (failure != null) { synchronized (RaceHooks.class) { failure.printStackTrace(trace); trace.flush(); } }
+        if (failure != null) { synchronized (StartupOrderingHooks.class) { failure.printStackTrace(trace); trace.flush(); } }
         System.err.println("COMPAT INVALID: " + message);
         Runtime.getRuntime().halt(86);
     }
@@ -149,7 +149,7 @@ public final class RaceHooks {
                 catch (ConcurrentModificationException expected) {
                     cme = true;
                     event("ORIGINAL_CME");
-                    synchronized (RaceHooks.class) { expected.printStackTrace(trace); trace.flush(); }
+                    synchronized (StartupOrderingHooks.class) { expected.printStackTrace(trace); trace.flush(); }
                     end();
                     throw expected;
                 }
@@ -169,7 +169,7 @@ public final class RaceHooks {
         if (ACTIVE.get() != 0) mutation.overlap();
         String text = String.valueOf(key);
         event("ROOT_MUTATION " + operation + " " + text + " active=" + ACTIVE.get());
-        synchronized (RaceHooks.class) {
+        synchronized (StartupOrderingHooks.class) {
             new Exception("Root mutation stack").printStackTrace(trace);
             trace.flush();
         }

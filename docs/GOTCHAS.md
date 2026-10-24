@@ -19,3 +19,5 @@
   No hardcoded mod list needs editing; compare canonical bytes directly in a fresh worktree.
 - The supplied evidence's `installed-jars.json` contains hashes, not instance paths. Its
   `stage/` sibling contains the verified installed jars and server libraries.
+- Other server jobs can launch Java through arbitrary argument files. The runtime runner
+  waits for all existing Java processes rather than guessing activity from Forge class names.

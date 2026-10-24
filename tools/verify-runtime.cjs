@@ -19,8 +19,8 @@ function processes() {
   const command = "@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^java(w)?\\.exe$' } | Select-Object ProcessId,CommandLine) | ConvertTo-Json -Compress";
   const output = cp.execFileSync('powershell.exe', ['-NoProfile', '-Command', command], {encoding:'utf8', windowsHide:true}).trim();
   const list = output ? JSON.parse(output) : [];
-  return (Array.isArray(list) ? list : [list]).filter(p =>
-    /GradleWrapperMain|GradleWorkerMain|BootstrapLauncher|win_args|probe\.args|net\.minecraftforge\.renamer/.test(p.CommandLine || ''));
+  // Include argument-file launches and installers whose command lines do not name Forge.
+  return Array.isArray(list) ? list : [list];
 }
 
 async function main() {
@@ -35,6 +35,9 @@ async function main() {
   // Copy, never link: servers can rewrite configs and libraries. No launchers or installers.
   for (const name of ['libraries', 'mods', 'config', 'defaultconfigs', 'kubejs']) {
     fs.cpSync(path.join(stage, name), path.join(run, name), {recursive:true});
+  }
+  if (fs.readdirSync(path.join(run, 'mods')).some(name => /^corgikubejscompat-.*\.jar$/.test(name))) {
+    throw Error('Saved stage must not already contain the compatibility mod');
   }
   const properties = fs.readFileSync(path.join(stage, 'server.properties'), 'utf8')
     .replace(/^server-port=.*$/m, 'server-port=25629')
@@ -91,11 +94,11 @@ async function main() {
   const cleanup = () => { if (child.exitCode === null) child.kill(); };
   process.once('SIGINT', cleanup);
   process.once('SIGTERM', cleanup);
-  const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+  const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
   clearTimeout(watchdog); clearTimeout(reloadTimer);
   log.end();
   process.removeListener('SIGINT', cleanup); process.removeListener('SIGTERM', cleanup);
-  const trace = instrumented ? fs.readFileSync(path.join(run, 'race-trace.log'), 'utf8') : '';
+  const trace = instrumented ? fs.readFileSync(path.join(run, 'startup-ordering-trace.log'), 'utf8') : '';
   const snapshots = fs.readdirSync(run).filter(n => /^registry-snapshot-\d+\.txt$/.test(n)).sort((a,b) => parseInt(a.match(/\d+/)[0])-parseInt(b.match(/\d+/)[0]));
   let contentsHash;
   if (instrumented && scenario !== 'control' && snapshots.length >= 3) {
@@ -110,7 +113,7 @@ async function main() {
     contentsHash = crypto.createHash('sha256').update(after).digest('hex');
   }
   const passed = !expired && (scenario === 'control'
-    ? trace.includes('PASS control') && /ConcurrentModificationException/.test(text) && /ScriptManager\.load\(ScriptManager\.java:192\)/.test(trace)
+    ? code !== null && code !== 86 && trace.includes('PASS control') && /ConcurrentModificationException/.test(text) && /ScriptManager\.load\(ScriptManager\.java:192\)/.test(trace)
     : code === 0 && doneMs && reloaded && (!instrumented || (trace.includes('PASS ' + scenario) && contentsHash)));
   const result = {scenario, run, pid:child.pid, code, expired, doneMs, reloaded, contentsHash, passed};
   fs.writeFileSync(path.join(run, 'result.json'), JSON.stringify(result, null, 2));

@@ -73,7 +73,7 @@ tasks.register('verificationAgentJar', Jar) {
     archiveFileName = 'verification-agent.jar'
     destinationDirectory = layout.buildDirectory.dir('verification')
     manifest.attributes(
-        'Premain-Class': 'io.github.dirtyredz.corgikubejscompat.verification.agent.RaceAgent',
+        'Premain-Class': 'io.github.dirtyredz.corgikubejscompat.verification.agent.StartupOrderingAgent',
         'Boot-Class-Path': 'verification-hooks.jar'
     )
 }
