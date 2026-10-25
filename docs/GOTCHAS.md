@@ -26,6 +26,8 @@
   `stage/` sibling contains the verified installed jars and server libraries.
 - Other server jobs can launch Java through arbitrary argument files. The runtime runner
   waits for all existing Java processes rather than guessing activity from Forge class names.
+- Child-JVM tests use `java.home/bin/java`, adding `.exe` only on Windows. Keep platform
+  naming covered even on Windows hosts so Linux CI does not fail before the probe starts.
 - Installed `MappedRegistry` inserts a holder with `computeIfAbsent`, then assigns that
   identical holder again. Trace the no-op assignment separately from actual root mutations;
   three CorgiLib insertions are not six changes. Forge workers can also share thread names,

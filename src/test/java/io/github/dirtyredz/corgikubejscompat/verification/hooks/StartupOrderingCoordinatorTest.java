@@ -9,12 +9,26 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StartupOrderingCoordinatorTest {
+    private static Path javaLauncher(String osName) {
+        String executable = osName.startsWith("Windows") ? "java.exe" : "java";
+        return Path.of(System.getProperty("java.home"), "bin", executable);
+    }
+
+    @Test void javaLauncherUsesPlatformExecutableName() {
+        Path bin = Path.of(System.getProperty("java.home"), "bin");
+        assertEquals(bin.resolve("java.exe"), javaLauncher("Windows 11"));
+        assertEquals(bin.resolve("java"), javaLauncher("Linux"));
+        assertEquals(bin.resolve("java"), javaLauncher("Mac OS X"));
+        assertEquals(bin.resolve("java"), javaLauncher("Darwin"));
+        assertTrue(Files.isExecutable(javaLauncher(System.getProperty("os.name"))));
+    }
+
     @Test void writerDeadlineDoesNotStartDuringPackBootstrap() throws Exception {
         Path output = Files.createTempDirectory(Path.of("build"), "coordinator-test-").toAbsolutePath();
         String classpath = Path.of(Probe.class.getProtectionDomain().getCodeSource().getLocation().toURI())
                 + java.io.File.pathSeparator
                 + Path.of(StartupOrderingHooks.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-        Process child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString(),
+        Process child = new ProcessBuilder(javaLauncher(System.getProperty("os.name")).toString(),
                 "-Dcompat.scenario=writer-first", "-cp", classpath, Probe.class.getName())
                 .directory(output.toFile()).redirectErrorStream(true)
                 .redirectOutput(output.resolve("console.log").toFile()).start();
