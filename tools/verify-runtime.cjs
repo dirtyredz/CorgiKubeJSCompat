@@ -73,7 +73,9 @@ async function main() {
   let controlStopped = false;
   let reloadTimer;
   const stop = () => { if (!stopping) { stopping = true; child.stdin.write('stop\n'); } };
-  const watchdog = setTimeout(() => { expired = true; child.kill(); }, 480000);
+  // Full-pack diagnostic boot: 554.788 s to Done. Twice that, rounded up to
+  // a minute, plus one minute for reload/shutdown gives a finite 1,200 s budget.
+  const watchdog = setTimeout(() => { expired = true; child.kill(); }, 1200000);
   const receive = data => {
     log.write(data);
     text += data.toString();

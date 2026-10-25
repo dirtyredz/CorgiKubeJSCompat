@@ -25,7 +25,7 @@ The mod version lives only in `gradle.properties`.
 
 Check processes before Gradle; only one heavyweight build/server at a time. Runtime
 verification waits up to 45 minutes, uses BelowNormal priority, bounded latches and a
-480-second process watchdog. Never launch a client. Never install into the pack's instances.
+1,200-second process watchdog. Never launch a client. Never install into the pack's instances.
 The harness writes only into this repo's ignored `run/` and `build/` directories.
 
 Commit as `dirtyredz <dirtyredz@live.com>`. No push or release without owner authorization.
