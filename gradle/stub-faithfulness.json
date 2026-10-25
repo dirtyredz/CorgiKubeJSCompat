@@ -1,0 +1,11 @@
+{
+    "schema": 1,
+    "stubSourceSha256": "13a2b7a6c970e864d18ba9ef19ead7cfc063c8446223be4d43bff3070f691e02",
+    "pinnedJarSha256": {
+        "kubejs-forge-2001.6.5-build.26.jar": "1769312192fbf9d72f45054ba61130523bfb471b5f480a4bff8c210ec09400bb",
+        "Corgilib-Forge-1.20.1-4.0.3.5.jar": "6879c214e0793278e14105b70d085ba218551c39daa78c846273030278bef350",
+        "rhino-forge-2001.2.3-build.10.jar": "fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6"
+    },
+    "result": "byte-identical main classes",
+    "date": "2026-10-25T23:01:32.791342300Z"
+}

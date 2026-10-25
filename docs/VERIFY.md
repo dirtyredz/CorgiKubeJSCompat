@@ -14,11 +14,15 @@ An explicit directory or any default pinned file requires all three correct SHA-
 `./gradlew.bat --no-daemon verifyStubFaithfulness "-PdependencyDir=<installed-mods>"`
 compiles main against each API in separate `build/faithfulness/{real,stubs}` directories,
 then compares the complete class path sets and each byte. This also runs as part of `check`
-in real mode; stub-only CI prints `SKIP verifyStubFaithfulness: pinned real jars unavailable
-(CI uses compile-only stubs).` Archive timestamps/order are normalized by the shared guard.
+in real mode and writes `gradle/stub-faithfulness.json` only after byte equality succeeds.
+Commit that attestation alongside any stub or pin change. Stub-only CI fails unless its
+result, stub source tree SHA-256 and complete pinned jar SHA-256 map match. The tree digest
+hashes sorted relative paths and content SHA-256s (Java CRLF normalized to LF); additions,
+deletions and renames also invalidate it. `testStubAttestation` exercises rejection cases.
+Archive timestamps/order are normalized by the shared guard.
 No runtime proof is implied by successful compilation.
 
-The inspected inputs (SHA-256, also enforced in build.gradle) are:
+The inspected inputs (SHA-256, also enforced in gradle/compile-stubs.gradle) are:
 
 | Jar | SHA-256 |
 |---|---|
@@ -283,3 +287,32 @@ Execution failed for task ':testReleaseJarVerifier'.
 Normalize ZIP paths and patterns to the platform separator before Ant matching; the same
 fixture then rejected the root-level mixin file. Runtime pack proofs and Forge GameTests were
 not run: production code is unchanged, and there is no standalone Forge GameTest suite.
+
+## Stub review fixes verification, 2026-10-25
+
+All Gradle invocations used `--offline --no-daemon` and waited for existing Java processes
+before launch (HerbalWitch was active during the initial wait).
+
+- Real jars: `./gradlew.bat --offline --no-daemon test build verifyReleaseJar verifyStubFaithfulness
+  "-PdependencyDir=C:/Users/dirty/MultiMC/instances/Evil Eye Local/.minecraft/mods"`:
+  `BUILD SUCCESSFUL in 1m 40s`. All three pins verified; two independently compiled main
+  classes were byte-identical. This generated the committed attestation.
+- Hosted mode: `./gradlew.bat --offline --no-daemon test build verifyReleaseJar`:
+  `BUILD SUCCESSFUL in 1m 15s`; the committed attestation matched. Both builds executed
+  the new attestation fixtures and neutral archive fixtures; Java tests were up-to-date.
+- Drift: appended a temporary comment to KubeJSPlugin.java, ran
+  `./gradlew.bat --offline --no-daemon verifyStubFaithfulness`, and observed exit 1:
+  `Stub attestation missing, invalid or stale; rerun verifyStubFaithfulness with -PdependencyDir=<pinned-real-jars> and commit gradle/stub-faithfulness.json`.
+  Restored exact original bytes before the successful hosted gate. The guard fixtures also
+  reject changed pins, missing evidence, invalid result/schema/date, and detect tree changes.
+- Root `node --test tools/ci-test/*.test.mjs`: 13 passed, zero failures.
+  `node tools/test-sync-mod-files.mjs`: passed. Root fixture commit: `b407388`.
+- Root `tools/sync-mod-files.ps1 -Check -Mod <this-worktree>`: `OK 1 mods in sync`.
+  `git diff --check` and `dk check` passed in both worktrees; root Docket retains two
+  pre-existing duplicate-rank warnings. No review-fix item exists; the broader delivery item
+  remains owned by its orchestrator.
+
+An initial verification probe overlapped editing the Gradle extraction and failed at
+`compile-stubs.gradle` line 40 with `Could not find method configureStubFaithfulness()`.
+It was not valid pre-fix evidence; the completed configuration passed the gates above.
+No runtime or full-tier suites were run; no production behavior changed.

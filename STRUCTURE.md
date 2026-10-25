@@ -7,10 +7,14 @@
 - `src/main/resources/`: exact-version Forge dependencies, both-side KubeJS discovery,
   and `pack.mcmeta` for Minecraft pack discovery.
 - `src/test/`: cheap plugin-bytecode and startup-trace contract checks; no Minecraft bootstrap.
-- `src/stubs/java/`: minimal compile-only external API; never packaged or used at runtime.
+- `src/stubs/java/`: minimal compile-only external API; `.ci/mod.json` `jar.forbiddenEntries`
+  enforces never packaged. `StubApiContractTest` and the attestation guard the signatures;
+  these stubs are never used at runtime.
 - `.ci/`: mod-specific release checks and canonical shared CI scripts.
 - `.github/`: canonical hosted verification/release workflows and build setup action.
-- `gradle/verify-stub-faithfulness.gradle`: independent real/stub main compilation comparison.
+- `gradle/compile-stubs.gradle`: mod-local pins, real/stub selection, stub jar and pin verification.
+- `gradle/verify-stub-faithfulness.gradle`: real/stub compilation comparison and attestation guard/tests.
+- `gradle/stub-faithfulness.json`: committed proof bound to the stub source tree and pinned jar hashes.
 - `gradle/verify-release-jar.gradle`: canonical declarative archive guard and regression fixtures.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/agent/`: installed-class
   `StartupOrderingAgent` instrumentation. Kept outside main and outside the release jar.

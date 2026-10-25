@@ -10,7 +10,7 @@ The mod version lives only in `gradle.properties`.
 
 - Fast gate: `./gradlew.bat --no-daemon test build verifyReleaseJar`.
   With no local jars this uses compile-only stubs. Add `-PdependencyDir=<installed-mods>`
-  to use the three exact, hash-checked jars listed in `build.gradle` and run the automatic
+  to use the three exact, hash-checked jars listed in `gradle/compile-stubs.gradle` and run the automatic
   byte-identical compilation check (`verifyStubFaithfulness`). Use `--offline` with cached inputs.
   The default directory is `run/dependencies`. No downloads or installs are needed when
   Forge, Gradle, Java 17 and JUnit are already cached. There is no separate lint task.

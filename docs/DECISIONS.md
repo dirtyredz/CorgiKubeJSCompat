@@ -11,8 +11,9 @@ for that signature. Unused APIs and runtime instrumentation targets are intentio
 verifyStubFaithfulness compiles main twice into separate fresh directories using the same
 Java toolchain/options and classpaths differing only by real jars versus the stubs jar.
 It requires identical class sets and bytes. check runs it when real inputs exist; hosted
-stub-only CI logs an explicit skip. The check proves this mod's compilation, not runtime
+stub-only CI requires a matching committed attestation. The check proves this mod's compilation, not runtime
 equivalence of mocks. Dependency upgrades require reinspection and this local gate.
+The real-jar gate writes `gradle/stub-faithfulness.json`; stub or pin changes invalidate its proof.
 
 Shared CI uses datagen=false and gametests=false: instrumentation requires an installed pack,
 and no runGameTestServer suite exists. Declarative release checks replace inspect-jar.ps1,

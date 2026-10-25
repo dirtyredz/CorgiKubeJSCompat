@@ -20,6 +20,8 @@
   A supplied dependencyDir or any pinned filename in run/dependencies selects real mode;
   missing files and hash mismatches then fail closed. An empty default selects stubs.
   Stubs live in build/stubs, never build/libs; release guards reject their package paths.
+  Stub or pin edits require a real-jar faithfulness run and committed attestation; hosted CI
+  validates that evidence and cannot regenerate it without the pinned jars.
 - The supplied evidence's `installed-jars.json` contains hashes, not instance paths. Its
   `stage/` sibling contains the verified installed jars and server libraries.
 - Other server jobs can launch Java through arbitrary argument files. The runtime runner

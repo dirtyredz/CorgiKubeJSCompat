@@ -1,0 +1,40 @@
+// Production uses only unmapped mod API names (and Supplier), so these exact,
+// hash-checked installed jars need no fg.deobf or transitive Maven downloads.
+def dependencyDirectory = providers.gradleProperty('dependencyDir').orElse('run/dependencies')
+def pins = [
+    'kubejs-forge-2001.6.5-build.26.jar': '1769312192fbf9d72f45054ba61130523bfb471b5f480a4bff8c210ec09400bb',
+    'Corgilib-Forge-1.20.1-4.0.3.5.jar': '6879c214e0793278e14105b70d085ba218551c39daa78c846273030278bef350',
+    'rhino-forge-2001.2.3-build.10.jar': 'fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6'
+]
+
+def realJars = files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+// Explicit paths and partial installs fail closed instead of silently masking missing/bad pins.
+def useRealJars = providers.gradleProperty('dependencyDir').isPresent() || realJars.files.any { it.exists() }
+logger.lifecycle("External API compilation: ${useRealJars ? 'hash-checked real jars' : 'compile-only stubs'}")
+
+sourceSets {
+    stubs {}
+}
+sourceSets.stubs.compileClasspath = configurations.minecraft
+def stubsJar = tasks.register('stubsJar', Jar) {
+    from sourceSets.stubs.output
+    archiveClassifier = 'compile-stubs'
+    destinationDirectory = layout.buildDirectory.dir('stubs')
+}
+dependencies { compileOnly(useRealJars ? realJars : files(stubsJar)) }
+
+tasks.register('verifyDependencyPins') {
+    inputs.files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+    doLast {
+        pins.each { name, expected ->
+            def input = file("${dependencyDirectory.get()}/$name")
+            if (!input.isFile()) throw new GradleException("Missing offline input: $input (set -PdependencyDir)")
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(input.bytes).encodeHex().toString()
+            if (actual != expected) throw new GradleException("SHA-256 mismatch: $input")
+        }
+    }
+}
+if (useRealJars) compileJava.dependsOn verifyDependencyPins
+
+apply from: 'gradle/verify-stub-faithfulness.gradle'
+configureStubFaithfulness(realJars, useRealJars, stubsJar, pins)

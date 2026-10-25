@@ -1,6 +1,75 @@
 // Compile the same main sources with the same compiler/options into independent directories.
 // The baseline classpath removes BOTH API alternatives before adding exactly one back.
-ext.configureStubFaithfulness = { realJars, useRealJars, stubsJar ->
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+class StubAttestation {
+    // Sorted relative paths plus content digests bind additions, deletions and renames.
+    // Source text uses LF on every checkout, including a Windows editor's CRLF saves.
+    static String treeHash(File root) {
+        def entries = []
+        root.eachFileRecurse { file ->
+            if (file.isFile()) {
+                def path = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+                def bytes = file.name.endsWith('.java') ?
+                        file.getText('UTF-8').replace('\r\n', '\n').getBytes('UTF-8') : file.bytes
+                def hash = MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex()
+                entries << "${path}\u0000${hash}\n".toString()
+            }
+        }
+        if (entries.isEmpty()) throw new GradleException('Stub source tree is empty')
+        MessageDigest.getInstance('SHA-256').digest(entries.sort().join('').getBytes('UTF-8')).encodeHex().toString()
+    }
+
+    static void verify(Object record, String treeHash, Map pins) {
+        if (!(record instanceof Map) || record.schema != 1 ||
+                record.result != 'byte-identical main classes' ||
+                record.stubSourceSha256 != treeHash || record.pinnedJarSha256 != pins ||
+                !(record.date instanceof String) || !(record.date ==~ /\d{4}-\d{2}-\d{2}T.+Z/)) {
+            throw new GradleException('Stub attestation missing, invalid or stale; rerun verifyStubFaithfulness with -PdependencyDir=<pinned-real-jars> and commit gradle/stub-faithfulness.json')
+        }
+    }
+}
+
+ext.configureStubFaithfulness = { realJars, useRealJars, stubsJar, pins ->
+    def attestation = file('gradle/stub-faithfulness.json')
+    tasks.register('testStubAttestation') {
+        group = 'verification'
+        doLast {
+            def good = [schema: 1, result: 'byte-identical main classes',
+                        stubSourceSha256: 'tree', pinnedJarSha256: [jar: 'pin'],
+                        date: '2026-10-25T00:00:00Z']
+            StubAttestation.verify(good, 'tree', [jar: 'pin'])
+            [null, [:], good + [result: 'different'], good + [schema: 2],
+             good + [stubSourceSha256: 'edited'], good + [pinnedJarSha256: [jar: 'changed']],
+             good + [date: null]].each { invalid ->
+                try {
+                    StubAttestation.verify(invalid, 'tree', [jar: 'pin'])
+                } catch (GradleException expected) { return }
+                throw new GradleException("Attestation regression: accepted ${invalid}")
+            }
+            def fixture = layout.buildDirectory.dir('faithfulness/tree-fixture').get().asFile
+            project.delete(fixture)
+            fixture.mkdirs()
+            def source = new File(fixture, 'Api.java')
+            source.setText('class Api {}\n', 'UTF-8')
+            def original = StubAttestation.treeHash(fixture)
+            source.setText('class Api {}\r\n', 'UTF-8')
+            assert StubAttestation.treeHash(fixture) == original : 'CRLF changed source identity'
+            source.append('// edited\n', 'UTF-8')
+            assert StubAttestation.treeHash(fixture) != original : 'Source edit was not detected'
+            source.setText('class Api {}\n', 'UTF-8')
+            def added = new File(fixture, 'Added.java')
+            added.setText('class Added {}\n', 'UTF-8')
+            assert StubAttestation.treeHash(fixture) != original : 'Source addition was not detected'
+            assert added.delete()
+            assert StubAttestation.treeHash(fixture) == original : 'Source deletion was not detected'
+            assert source.renameTo(new File(fixture, 'Renamed.java'))
+            assert StubAttestation.treeHash(fixture) != original : 'Source rename was not detected'
+            logger.lifecycle('PASS stub attestation regression fixtures')
+        }
+    }
     def compilers = [:]
     ['Real', 'Stubs'].each { mode ->
         compilers[mode] = tasks.register("compileMainAgainst${mode}", JavaCompile) {
@@ -28,8 +97,16 @@ ext.configureStubFaithfulness = { realJars, useRealJars, stubsJar ->
         description = 'Require byte-identical main classes compiled with pinned jars and compile stubs.'
         if (useRealJars) dependsOn compilers.values()
         doLast {
+            def treeHash = StubAttestation.treeHash(file('src/stubs'))
             if (!useRealJars) {
-                logger.lifecycle('SKIP verifyStubFaithfulness: pinned real jars unavailable (CI uses compile-only stubs).')
+                def record = null
+                try {
+                    if (attestation.isFile()) record = new JsonSlurper().parse(attestation, 'UTF-8')
+                } catch (Exception malformed) {
+                    throw new GradleException('Malformed stub attestation; rerun verifyStubFaithfulness with pinned real jars', malformed)
+                }
+                StubAttestation.verify(record, treeHash, pins)
+                logger.lifecycle('PASS stub attestation: source tree and pinned jar hashes match byte-identical local proof')
                 return
             }
             def snapshots = ['Real', 'Stubs'].collect { mode ->
@@ -49,7 +126,10 @@ ext.configureStubFaithfulness = { realJars, useRealJars, stubsJar ->
                 }
             }
             logger.lifecycle("PASS stub faithfulness: ${snapshots[0].size()} main class files are byte-identical")
+            def record = [schema: 1, stubSourceSha256: treeHash, pinnedJarSha256: pins,
+                          result: 'byte-identical main classes', date: java.time.Instant.now().toString()]
+            attestation.setText(JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n', 'UTF-8')
         }
     }
-    tasks.named('check') { dependsOn 'verifyStubFaithfulness' }
+    tasks.named('check') { dependsOn 'verifyStubFaithfulness', 'testStubAttestation' }
 }

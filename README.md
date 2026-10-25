@@ -33,6 +33,8 @@ Local gate: `./gradlew.bat --no-daemon test build verifyReleaseJar`. Without loc
 CI compiles against isolated stubs; actual installations still require both real mods.
 With `-PdependencyDir=<installed-mods>`, all three pinned API jars (including Rhino) are
 hash-checked, and `verifyStubFaithfulness` requires byte-identical real/stub main classes.
+That local gate writes a committed attestation; hosted CI rejects changed stubs or pins
+until the real-jar gate regenerates it.
 See [verification](docs/VERIFY.md) for the reproduction commands and inspected signatures.
 CI declares no datagen and no Forge GameTests: the existing instrumentation proofs need
 the real installed pack and are not a `runGameTestServer` suite.
