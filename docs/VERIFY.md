@@ -163,4 +163,34 @@ all four tests: `BUILD SUCCESSFUL in 59s`. No separate lint task exists.
 The build regenerated ZIP metadata in the release jar; comparison verified every entry's
 contents byte-for-byte against the original. The original hash-checked release jar was restored
 from the first writer-first run before continuing acceptance. Jar inspection passed again with
-the original SHA-256 above. Fixed-order runtime results and paired timings remain pending.
+the original SHA-256 above.
+
+The corrected `writer-first`, `reader-first`, and `baseline` commands all passed. Verbatim
+runner results (the existing runner serializes its truthy `passed` value as the contents hash):
+
+```text
+{"scenario":"writer-first","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\writer-first-1792898021609","pid":37920,"code":0,"expired":false,"controlStopped":false,"doneMs":526663.9585,"reloaded":true,"contentsHash":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6","passed":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6"}
+{"scenario":"reader-first","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\reader-first-1792898643784","pid":26740,"code":0,"expired":false,"controlStopped":false,"doneMs":391061.9915,"reloaded":true,"contentsHash":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6","passed":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6"}
+{"scenario":"baseline","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\baseline-1792899135694","pid":36592,"code":0,"expired":false,"controlStopped":false,"doneMs":392432.6631,"reloaded":true,"contentsHash":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6","passed":"2cc1613fb6225f6d2438648a4e98f38ea14a22e574d0396ab0da2ddac0bf91d6"}
+```
+
+Writer-first recorded `HOOK_WAITING_ON_INITIALIZATION`, `INDEPENDENT_WRITER_RELEASE`,
+then `INITIALIZER_END`, `HOOK_RETURN`, and `ITERATOR_CREATED 1` in that order.
+Reader-first recorded its held constructor before the hook, initialization on the hook's
+thread, hook return, iterator creation, then completion of the released constructor.
+Every successful instrumented trace ended with `enumerations=3 overlap=0` and exactly one
+insertion for each of `blending_function`, `condition`, and `villager_trades_item_listing`.
+All three codec registries were nonempty and unchanged across reload.
+
+A direct byte comparison of the three `registry-snapshot-3.txt` files passed:
+
+```text
+PASS: baseline, writer-first and reader-first final snapshots are byte-identical
+```
+
+The first comparison command had a PowerShell/Node inline quoting error,
+`SyntaxError: missing ) after argument list`; it was corrected using PowerShell byte reads
+and exact Base64 equality. The hashes above independently agree with that byte comparison.
+Workspace `sync-mod-files.ps1 -Check` returned `OK 5 mods in sync`; direct SHA-256 comparison
+of all six worktree canonical files returned `PASS: all six worktree canonical files match`.
+Paired uninstrumented timings remain pending.
