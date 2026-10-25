@@ -7,13 +7,18 @@
 - `src/main/resources/`: exact-version Forge dependencies, both-side KubeJS discovery,
   and `pack.mcmeta` for Minecraft pack discovery.
 - `src/test/`: cheap plugin-bytecode and startup-trace contract checks; no Minecraft bootstrap.
+- `src/stubs/java/`: minimal compile-only external API; never packaged or used at runtime.
+- `.ci/`: mod-specific release checks and canonical shared CI scripts.
+- `.github/`: canonical hosted verification/release workflows and build setup action.
+- `gradle/verify-stub-faithfulness.gradle`: independent real/stub main compilation comparison.
+- `gradle/verify-release-jar.gradle`: canonical declarative archive guard and regression fixtures.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/agent/`: installed-class
   `StartupOrderingAgent` instrumentation. Kept outside main and outside the release jar.
 - `src/gameTest/java/io/github/dirtyredz/corgikubejscompat/verification/hooks/`: bootstrap-visible
   `StartupOrderingHooks` latch coordination, root mutation tracing, snapshots, and invalid-test detection.
 - `tools/verify-runtime.cjs`: copies the saved stage into disposable `run/` directories,
   starts one headless BelowNormal server, reloads, stops, and validates results.
-- `tools/inspect-jar.ps1`: asserts the release contents, metadata and plugin discovery; prints SHA-256.
+- `tools/test-world/`, `gradle/*world.gradle`: synced shared world assets/helpers, not release inputs.
 - `docs/`: decisions, gotchas, and verification protocol.
 - `build.gradle`, `settings.gradle`, `gradle.properties`: standalone offline build and pinned inputs.
 - `gradle/wrapper/`, `gradlew*`, `.gitattributes`, `.gitignore`: byte-identical workspace templates.

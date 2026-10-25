@@ -1,7 +1,54 @@
 # Verification
 
-Use the commands in [CLAUDE.md](../CLAUDE.md). No network downloads are permitted.
+Use the commands in [CLAUDE.md](../CLAUDE.md). Cached builds can use `--offline`.
 The saved server stage is a read-only input; every run gets a private copy under `run/`.
+
+## Compile stubs and hosted CI
+
+Run `./gradlew.bat --no-daemon test build verifyReleaseJar` with no `dependencyDir` and
+no pinned jar filenames under `run/dependencies` to reproduce hosted stub mode. Nothing
+outside the checkout is searched automatically. For real mode, append
+`"-PdependencyDir=C:/Users/dirty/MultiMC/instances/Evil Eye Local/.minecraft/mods"` (read only).
+An explicit directory or any default pinned file requires all three correct SHA-256 pins.
+
+`./gradlew.bat --no-daemon verifyStubFaithfulness "-PdependencyDir=<installed-mods>"`
+compiles main against each API in separate `build/faithfulness/{real,stubs}` directories,
+then compares the complete class path sets and each byte. This also runs as part of `check`
+in real mode; stub-only CI prints `SKIP verifyStubFaithfulness: pinned real jars unavailable
+(CI uses compile-only stubs).` Archive timestamps/order are normalized by the shared guard.
+No runtime proof is implied by successful compilation.
+
+The inspected inputs (SHA-256, also enforced in build.gradle) are:
+
+| Jar | SHA-256 |
+|---|---|
+| kubejs-forge-2001.6.5-build.26.jar | `1769312192fbf9d72f45054ba61130523bfb471b5f480a4bff8c210ec09400bb` |
+| Corgilib-Forge-1.20.1-4.0.3.5.jar | `6879c214e0793278e14105b70d085ba218551c39daa78c846273030278bef350` |
+| rhino-forge-2001.2.3-build.10.jar | `fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6` |
+
+Reinspect with `javap -s -p -classpath "<kubejs.jar>;<corgilib.jar>;<rhino.jar>"`
+and these fully qualified types before changing the pins:
+
+- `corgitaco.corgilib.core.CorgiLibRegistry`: public class, public static final
+  `Supplier<Registry<Codec<? extends corgitaco.corgilib.entity.condition.Condition>>> CONDITION`;
+  descriptor `Ljava/util/function/Supplier;`. Supporting `Condition` is an interface.
+- `dev.latvian.mods.kubejs.KubeJSPlugin`: public class, public constructor `()V`, public
+  instance `registerTypeWrappers(ScriptType, TypeWrappers)` with descriptor
+  `(Ldev/latvian/mods/kubejs/script/ScriptType;Ldev/latvian/mods/rhino/util/wrap/TypeWrappers;)V`.
+- `dev.latvian.mods.kubejs.script.ScriptType`: enum, not an ordinary class or interface.
+- `dev.latvian.mods.rhino.util.wrap.TypeWrappers`: public non-final class, no generics.
+
+Only APIs consumed by main are represented. ScriptType's unused interfaces/methods and
+Condition's unused members are omitted. Instrumentation string targets (`CorgiLibForge`,
+`CorgiLib.init`, `ScriptManager`, Minecraft registry reflection) resolve only in real pack
+processes, so they get no compile mocks. There are no mixin targets.
+StubApiContractTest locks the consumed signatures; PluginContractTest locks production bytecode.
+`verifyReleaseJar` tests synthetic contaminated archives and checks `.ci/mod.json`, replacing
+the old `tools/inspect-jar.ps1` manual checker. Historical results below retain its old command.
+
+## Installed-server verification protocol
+
+The following runtime protocol is historical qualification, not the hosted CI gate.
 
 1. `control`: no compatibility jar. Hold the registry initializer, create KubeJS's actual
    root iterator, release the writer, wait for its constructor's init call to return, resume.
@@ -194,3 +241,45 @@ and exact Base64 equality. The hashes above independently agree with that byte c
 Workspace `sync-mod-files.ps1 -Check` returned `OK 5 mods in sync`; direct SHA-256 comparison
 of all six worktree canonical files returned `PASS: all six worktree canonical files match`.
 Paired uninstrumented timings remain pending.
+
+## CI adoption verification, 2026-10-25
+
+- `./gradlew.bat --no-daemon test build verifyReleaseJar` with no dependencyDir and no
+  run/dependencies: `BUILD SUCCESSFUL in 1m 31s`. Six Java tests passed (the final gate reused
+  their up-to-date results). The faithful-compilation task logged its explicit CI skip.
+- `./gradlew.bat --no-daemon test build verifyReleaseJar verifyStubFaithfulness
+  "-PdependencyDir=C:/Users/dirty/MultiMC/instances/Evil Eye Local/.minecraft/mods"`:
+  `BUILD SUCCESSFUL in 1m 48s`; `PASS stub faithfulness: 2 main class files are byte-identical`.
+  All three real jar hashes matched the pins. Both gates passed all synthetic release-guard cases.
+- Direct byte comparison also passed for the complete real/stub reobfuscated release jars.
+  Both SHA-256 values: `e3b211f5b7603f65d737260c06c247cba67543397e4309d031e77c9c0979d263`.
+- Root `node --test tools/ci-test/*.test.mjs`: 13 passed, 0 failed.
+  `node tools/test-sync-mod-files.mjs`: passed. Canonical guard and its synthetic fixtures
+  are committed in root branch corgi-stub-guard, commit `ba739a9`.
+- Root worktree `tools/sync-mod-files.ps1 -Check -Mod <this-worktree>`: `OK 1 mods in sync`.
+  `git diff --check` in both worktrees and `dk check` passed.
+- `gh release list -R dirtyredz/CorgiKubeJSCompat` reported v1.0.1 already published
+  (2026-10-25T05:41:42Z). No version change or new 1.0.1 notes were made.
+
+Intermediate failures, corrected before the successful gates:
+
+```text
+StubApiContractTest > pluginCallbackAndParameterKindsMatchPinnedApi() FAILED
+    java.lang.NullPointerException at StubApiContractTest.java:17
+StubApiContractTest > conditionRetainsItsRealFieldDescriptorAndGenericSignature() FAILED
+    java.lang.NullPointerException at StubApiContractTest.java:17
+6 tests completed, 2 failed
+```
+
+The tests were added after that invocation had configured Gradle, so it lacked their new
+stubClasses property. A fresh invocation picked up the complete configuration and passed.
+The negative jar fixture then exposed Ant's Windows path separator handling:
+
+```text
+Execution failed for task ':testReleaseJarVerifier'.
+> Jar guard regression forbiddenMixin: contamination accepted
+```
+
+Normalize ZIP paths and patterns to the platform separator before Ant matching; the same
+fixture then rejected the root-level mixin file. Runtime pack proofs and Forge GameTests were
+not run: production code is unchanged, and there is no standalone Forge GameTest suite.

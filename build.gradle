@@ -23,13 +23,25 @@ def pins = [
     'rhino-forge-2001.2.3-build.10.jar': 'fed2211429301bf043864183cab9ab8e92d4cc4dbb9e488ce6c75217c54584a6'
 ]
 
+def realJars = files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+// Explicit paths and partial installs fail closed instead of silently masking missing/bad pins.
+def useRealJars = providers.gradleProperty('dependencyDir').isPresent() || realJars.files.any { it.exists() }
+logger.lifecycle("External API compilation: ${useRealJars ? 'hash-checked real jars' : 'compile-only stubs'}")
+
 sourceSets {
+    stubs {}
     gameTest {} // Standalone installed-server instrumentation; never a release input.
+}
+sourceSets.stubs.compileClasspath = configurations.minecraft
+def stubsJar = tasks.register('stubsJar', Jar) {
+    from sourceSets.stubs.output
+    archiveClassifier = 'compile-stubs'
+    destinationDirectory = layout.buildDirectory.dir('stubs')
 }
 repositories { mavenCentral() }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    compileOnly files(pins.keySet().collect { file("${dependencyDirectory.get()}/$it") })
+    compileOnly(useRealJars ? realJars : files(stubsJar))
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.ow2.asm:asm-tree:9.8'
@@ -48,11 +60,16 @@ tasks.register('verifyDependencyPins') {
         }
     }
 }
-compileJava.dependsOn verifyDependencyPins
+if (useRealJars) compileJava.dependsOn verifyDependencyPins
+
+apply from: 'gradle/verify-stub-faithfulness.gradle'
+configureStubFaithfulness(realJars, useRealJars, stubsJar)
 test {
+    dependsOn 'stubsClasses'
     useJUnitPlatform()
     systemProperty 'mainClasses', sourceSets.main.output.classesDirs.asPath
     systemProperty 'mainResources', sourceSets.main.output.resourcesDir.absolutePath
+    systemProperty 'stubClasses', sourceSets.stubs.output.classesDirs.asPath
 }
 processResources {
     inputs.property 'mod_version', mod_version
@@ -79,3 +96,5 @@ tasks.register('verificationAgentJar', Jar) {
     )
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+apply from: 'gradle/verify-release-jar.gradle'

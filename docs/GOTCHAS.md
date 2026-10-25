@@ -15,8 +15,11 @@
 - The installed/transformed `MinecraftServer.m_129861_` reload method has multiple return
   paths. Observe every returned future, while asserting exactly one matching method.
 - Never ship `build/verification/` jars. Only `build/libs/` contains the reobfuscated mod.
-- The workspace shared-file checker discovers `mods/*/build.gradle` and does not see worktrees.
-  No hardcoded mod list needs editing; compare canonical bytes directly in a fresh worktree.
+- The workspace shared-file checker accepts worktrees with `-Mod <absolute-worktree-path>`.
+- Stub mode is compilation only: it cannot run KubeJS, CorgiLib or the installed-server proofs.
+  A supplied dependencyDir or any pinned filename in run/dependencies selects real mode;
+  missing files and hash mismatches then fail closed. An empty default selects stubs.
+  Stubs live in build/stubs, never build/libs; release guards reject their package paths.
 - The supplied evidence's `installed-jars.json` contains hashes, not instance paths. Its
   `stage/` sibling contains the verified installed jars and server libraries.
 - Other server jobs can launch Java through arbitrary argument files. The runtime runner

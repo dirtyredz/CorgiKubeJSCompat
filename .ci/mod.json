@@ -1,0 +1,48 @@
+{
+  "modId": "corgikubejscompat",
+  "mainPackage": "io.github.dirtyredz.corgikubejscompat",
+  "datagen": false,
+  "gametests": false,
+  "packSide": "both",
+  "jar": {
+    "requiredEntries": [
+      "META-INF/LICENSE",
+      "META-INF/MANIFEST.MF",
+      "kubejs.plugins.txt",
+      "pack.mcmeta"
+    ],
+    "forbiddenEntries": [
+      "corgitaco/**",
+      "dev/latvian/**",
+      "**/*.mixins.json",
+      "**/verification/**"
+    ],
+    "manifestExcludes": [
+      "Premain-Class:",
+      "Agent-Class:",
+      "Launcher-Agent-Class:",
+      "Boot-Class-Path:",
+      "Can-Redefine-Classes:",
+      "Can-Retransform-Classes:",
+      "Can-Set-Native-Method-Prefix:",
+      "MixinConfigs:"
+    ],
+    "entryEquals": {
+      "kubejs.plugins.txt": "io.github.dirtyredz.corgikubejscompat.CorgiRegistryPlugin"
+    },
+    "entryContains": [
+      {
+        "entry": "META-INF/LICENSE",
+        "contains": "MIT License"
+      },
+      {
+        "entry": "META-INF/mods.toml",
+        "contains": "[[dependencies.corgikubejscompat]]\nmodId=\"kubejs\"\nmandatory=true\nversionRange=\"[2001.6.5-build.26]\"\nordering=\"NONE\"\nside=\"BOTH\""
+      },
+      {
+        "entry": "META-INF/mods.toml",
+        "contains": "[[dependencies.corgikubejscompat]]\nmodId=\"corgilib\"\nmandatory=true\nversionRange=\"[4.0.3.5]\"\nordering=\"NONE\"\nside=\"BOTH\""
+      }
+    ]
+  }
+}

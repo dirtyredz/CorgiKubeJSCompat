@@ -1,0 +1,55 @@
+// Compile the same main sources with the same compiler/options into independent directories.
+// The baseline classpath removes BOTH API alternatives before adding exactly one back.
+ext.configureStubFaithfulness = { realJars, useRealJars, stubsJar ->
+    def compilers = [:]
+    ['Real', 'Stubs'].each { mode ->
+        compilers[mode] = tasks.register("compileMainAgainst${mode}", JavaCompile) {
+            onlyIf { useRealJars }
+            if (useRealJars) dependsOn 'verifyDependencyPins', stubsJar
+            source = sourceSets.main.java
+            def mainCompiler = tasks.named('compileJava', JavaCompile).get()
+            javaCompiler = mainCompiler.javaCompiler
+            classpath = sourceSets.main.compileClasspath.minus(realJars).minus(files(stubsJar)) +
+                    (mode == 'Real' ? realJars : files(stubsJar))
+            destinationDirectory = layout.buildDirectory.dir("faithfulness/${mode.toLowerCase()}")
+            options.encoding = mainCompiler.options.encoding
+            options.compilerArgs = mainCompiler.options.compilerArgs
+            options.debug = mainCompiler.options.debug
+            options.debugOptions.debugLevel = mainCompiler.options.debugOptions.debugLevel
+            options.annotationProcessorPath = mainCompiler.options.annotationProcessorPath
+            options.incremental = false
+            // Always compare fresh outputs, including after source deletions.
+            outputs.upToDateWhen { false }
+            doFirst { project.delete(destinationDirectory) }
+        }
+    }
+    tasks.register('verifyStubFaithfulness') {
+        group = 'verification'
+        description = 'Require byte-identical main classes compiled with pinned jars and compile stubs.'
+        if (useRealJars) dependsOn compilers.values()
+        doLast {
+            if (!useRealJars) {
+                logger.lifecycle('SKIP verifyStubFaithfulness: pinned real jars unavailable (CI uses compile-only stubs).')
+                return
+            }
+            def snapshots = ['Real', 'Stubs'].collect { mode ->
+                def root = compilers[mode].get().destinationDirectory.get().asFile
+                def result = [:]
+                fileTree(root).matching { include '**/*.class' }.visit { detail ->
+                    if (!detail.directory) result[detail.relativePath.pathString] = detail.file.bytes
+                }
+                result
+            }
+            if (snapshots[0].isEmpty() || snapshots[0].keySet() != snapshots[1].keySet()) {
+                throw new GradleException('Stub faithfulness failed: main class sets differ or are empty')
+            }
+            snapshots[0].each { name, bytes ->
+                if (!Arrays.equals(bytes, snapshots[1][name])) {
+                    throw new GradleException("Stub faithfulness failed: different main bytecode: ${name}")
+                }
+            }
+            logger.lifecycle("PASS stub faithfulness: ${snapshots[0].size()} main class files are byte-identical")
+        }
+    }
+    tasks.named('check') { dependsOn 'verifyStubFaithfulness' }
+}

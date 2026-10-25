@@ -8,8 +8,10 @@ The mod version lives only in `gradle.properties`.
 
 ## Verification
 
-- Fast gate: `./gradlew --offline test build -PdependencyDir=<installed-mods>`.
-  Supply the three exact jars listed in `build.gradle`; they are read and hash checked.
+- Fast gate: `./gradlew.bat --no-daemon test build verifyReleaseJar`.
+  With no local jars this uses compile-only stubs. Add `-PdependencyDir=<installed-mods>`
+  to use the three exact, hash-checked jars listed in `build.gradle` and run the automatic
+  byte-identical compilation check (`verifyStubFaithfulness`). Use `--offline` with cached inputs.
   The default directory is `run/dependencies`. No downloads or installs are needed when
   Forge, Gradle, Java 17 and JUnit are already cached. There is no separate lint task.
 - Runtime harness build: `./gradlew --offline verificationAgentJar`.
@@ -19,9 +21,8 @@ The mod version lives only in `gradle.properties`.
   `plain-base` and `plain-fixed` run without instrumentation for paired measurements.
   Set `COMPAT_WORLD` to the same saved world directory for all measurements.
   See [verification](docs/VERIFY.md) for acceptance and limitations.
-- Shared files: run the workspace `tools/sync-mod-files.ps1 -Check` and compare
-  this worktree's six canonical files directly against `tools/mod-template/`.
-- Jar inspection: `powershell -NoProfile -File tools/inspect-jar.ps1`.
+- Shared files: run the workspace `tools/sync-mod-files.ps1 -Check -Mod <this-worktree>`.
+- Jar inspection: `verifyReleaseJar` enforces `.ci/mod.json`; no separate manual checker.
 
 Check processes before Gradle; only one heavyweight build/server at a time. Runtime
 verification waits up to 45 minutes, uses BelowNormal priority, bounded latches and a
