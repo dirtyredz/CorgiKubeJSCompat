@@ -27,3 +27,6 @@
   so traces include thread IDs.
 - The control's failed Forge startup can leave pack threads alive. Validate the CME in the
   hook, let it propagate to Forge's startup-failure log, then terminate that control JVM.
+- Full-pack bootstrap can exceed eight minutes even without another JVM. The outer watchdog
+  is calibrated from a completed boot; start the writer coordinator's 60-second deadline only
+  once the initializer is held, not at agent premain before jar scanning and mod loading.

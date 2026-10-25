@@ -37,6 +37,10 @@ public final class StartupOrderingHooks {
         } catch (IOException e) { throw new UncheckedIOException(e); }
         require(Set.of("control", "writer-first", "reader-first", "baseline").contains(MODE), "Unknown scenario");
         event("SCENARIO " + MODE);
+        Runtime.getRuntime().addShutdownHook(new Thread(StartupOrderingHooks::finish, "compat-result"));
+    }
+
+    private static void startWriterCoordinator() {
         if (MODE.equals("writer-first")) {
             Thread coordinator = new Thread(() -> {
                 await(WRITER_HELD, "writer held");
@@ -59,7 +63,6 @@ public final class StartupOrderingHooks {
             coordinator.setDaemon(true);
             coordinator.start();
         }
-        Runtime.getRuntime().addShutdownHook(new Thread(StartupOrderingHooks::finish, "compat-result"));
     }
 
     public static synchronized void event(String message) {
@@ -100,6 +103,8 @@ public final class StartupOrderingHooks {
         }
         event("INITIALIZER_ENTER");
         WRITER_HELD.countDown();
+        // Start the interleaving deadline here, not at premain before full-pack bootstrap.
+        startWriterCoordinator();
         if (MODE.equals("control") || MODE.equals("writer-first")) await(RELEASE_WRITER, "release initializer");
     }
     public static void initializerEnd() {

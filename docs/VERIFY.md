@@ -118,4 +118,49 @@ PASS: exact BOTH dependencies, plugin entry, two production classes, no tests or
 
 SHA-256 remains `a53230f6087654395a88bf03331b7ebad092a0061a7dd1a262b0a8730276e4f1`.
 `node --check tools/verify-runtime.cjs` and `git diff --check` passed after the timeout edit.
-Forced-order acceptance and paired timings remain pending below.
+### Forced ordering and coordinator correction
+
+The next control, `run/control-1792896244903`, was interrupted after another checkout
+started a Gradle build. Its `process-check.json` records the overlap. Verbatim result:
+
+```text
+{"scenario":"control","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\control-1792896244903","pid":30988,"code":4294967295,"expired":false,"controlStopped":false,"reloaded":false,"passed":false}
+Error: Runtime verification invalid or failed; inspect C:\Users\dirty\projects\minecraft-mods\.worktrees\corgikubejscompat\run\control-1792896244903
+```
+
+After waiting for that build to exit, `node tools/verify-runtime.cjs $stage $java control`
+completed. Its trace contains `ScriptManager.load(ScriptManager.java:192)`, exactly one
+insertion for each CorgiLib key, and `enumerations=1 overlap=3`. Verbatim result:
+
+```text
+{"scenario":"control","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\control-1792896787854","pid":23304,"code":null,"expired":false,"controlStopped":true,"reloaded":false,"passed":true}
+```
+
+The first `writer-first` exposed a harness-only deadline defect: the independent coordinator
+started its 60-second wait for the writer at premain, before the full pack could bootstrap.
+Verbatim trace and runner result:
+
+```text
+395708058169900 [compat-latch-coordinator#14] INVALID Watchdog expired: writer held
+{"scenario":"writer-first","run":"C:\\Users\\dirty\\projects\\minecraft-mods\\.worktrees\\corgikubejscompat\\run\\writer-first-1792897441407","pid":33176,"code":86,"expired":false,"controlStopped":false,"reloaded":false,"passed":false}
+Error: Runtime verification invalid or failed; inspect C:\Users\dirty\projects\minecraft-mods\.worktrees\corgikubejscompat\run\writer-first-1792897441407
+```
+
+`StartupOrderingCoordinatorTest` reproduced the defect in an isolated JVM before the fix:
+
+```text
+Writer deadline started before the initializer was held
+ ==> expected: <0> but was: <1>
+4 tests completed, 1 failed
+Execution failed for task ':test'.
+BUILD FAILED in 3m 58s
+```
+
+The coordinator now starts when the writer initializer is held; all interleaving waits retain
+their 60-second bounds. No production code changed. The documented fast gate plus agent build,
+`./gradlew --offline test build verificationAgentJar -PdependencyDir=<stage>/mods`, then passed
+all four tests: `BUILD SUCCESSFUL in 59s`. No separate lint task exists.
+The build regenerated ZIP metadata in the release jar; comparison verified every entry's
+contents byte-for-byte against the original. The original hash-checked release jar was restored
+from the first writer-first run before continuing acceptance. Jar inspection passed again with
+the original SHA-256 above. Fixed-order runtime results and paired timings remain pending.
